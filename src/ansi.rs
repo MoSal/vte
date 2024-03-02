@@ -677,6 +677,9 @@ pub trait Handler {
     ///
     /// The output is of form `CSI > 4 ; mode m`.
     fn report_modify_other_keys(&mut self) {}
+
+    // Set SCP control
+    fn set_scp(&mut self, _ps1: u16, _ps2: u16) {}
 }
 
 bitflags! {
@@ -1550,6 +1553,28 @@ where
                 };
 
                 handler.clear_line(mode);
+            },
+            ('k', [b' ']) => {
+                // SCP control
+                //
+                // Changes from ECMA-48 as proposed by the BiDi draft proposal:
+                //  * Recognize value 0 for Ps1
+                //  * Allow passing no params or Ps1 alone
+                //  * Assume default 0 value for both Ps1 and Ps2
+                //
+                //  https://terminal-wg.pages.freedesktop.org/bidi/recommendation/escape-sequences.html
+                let ps1 = params_iter.next().unwrap_or(&[0]);
+                let ps2 = params_iter.next().unwrap_or(&[0]);
+                if params_iter.next().is_some() {
+                    unhandled!();
+                } else {
+                    match (ps1, ps2) {
+                        (&[ps1], &[ps2]) if ps1 <= 2 && ps2 <= 2 => {
+                            handler.set_scp(ps1, ps2);
+                        },
+                        _ => unhandled!(),
+                    }
+                }
             },
             ('L', []) => handler.insert_blank_lines(next_param_or(1) as usize),
             ('l', []) => {
